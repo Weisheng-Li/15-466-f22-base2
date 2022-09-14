@@ -43,15 +43,28 @@ Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
 
 PlayMode::PlayMode() : scene(*hexapod_scene) {
 	// //get pointers to leg for convenience:
-	// for (auto &transform : scene.transforms) {
-	// 	if (transform.name == "Hip.FL") hip = &transform;
-	// 	else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-	// 	else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
-	// }
+	for (auto &transform : scene.transforms) {
+		if (transform.name == "Moon") moon = &transform;
+		else if (transform.name.find("rabbit") == 0) {
+			rabbit_transform.push_back(&transform);
+			rabbit_state_array.push_back(inactive);
+			rabbit_base_pos.push_back(transform.position);
+		}
+		// if (transform.name == "Hip.FL") hip = &transform;
+		// else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
+		// else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+	}
+	assert(rabbit_transform.size() == rabbit_state_array.size() 
+		&& rabbit_state_array.size() == rabbit_base_pos.size());
+
+	if (moon == nullptr) throw std::runtime_error("moon not found.");
+	if (rabbit_transform.size() < 14) throw std::runtime_error("some rabbits are lost: " + std::to_string(rabbit_transform.size()));
 	// if (hip == nullptr) throw std::runtime_error("Hip not found.");
 	// if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
 	// if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
 
+	moon_cur_axis = glm::vec3(0, 0, 1);
+	srand(15666u);
 	// hip_base_rotation = hip->rotation;
 	// upper_leg_base_rotation = upper_leg->rotation;
 	// lower_leg_base_rotation = lower_leg->rotation;
@@ -142,6 +155,60 @@ void PlayMode::update(float elapsed) {
 	// 	glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
 	// 	glm::vec3(0.0f, 0.0f, 1.0f)
 	// );
+
+	// rotate the moon
+	{
+		float delta = static_cast<float>(rand() % 10) / 40.0f;
+
+		// not sure if normalization is necessary, but I just do it anyway
+		if (moon_cur_axis.x >= moon_cur_axis.y && moon_cur_axis.x >= moon_cur_axis.z)
+			moon_cur_axis += glm::vec3(0, 0, delta);
+		else if (moon_cur_axis.y >= moon_cur_axis.x && moon_cur_axis.y >= moon_cur_axis.z)
+			moon_cur_axis += glm::vec3(0, delta, 0);
+		if (moon_cur_axis.z >= moon_cur_axis.x && moon_cur_axis.z >= moon_cur_axis.y)
+			moon_cur_axis += glm::vec3(delta, 0, 0);
+		// moon_cur_axis += glm::vec3(delta_x, delta_y, delta_z);
+		moon_cur_axis = glm::normalize(moon_cur_axis);
+		float moon_rot_speed = float(2 * M_PI) * 0.05f;
+
+		moon->rotation *= glm::angleAxis(moon_rot_speed * elapsed, moon_cur_axis);
+	}
+
+	// rabbit control
+	{
+		float rabbit_speed = 50;
+		float delta_height = rabbit_speed * elapsed;
+
+		float max_height = 30;
+		float min_height = 2 * delta_height;
+
+		// a simple state machine for rabbit movement: inactive->up->down->inactive->...
+		for (int i = 0; i < rabbit_transform.size(); i++) {
+			if (rabbit_state_array[i] == inactive) {
+				rabbit_state_array[i] = moving_up;
+			} 
+			else if (rabbit_state_array[i] == moving_up) {
+				// rotate up unit vector to object orientation and scale with delta_height
+				glm::vec3 delta_height_vec = 
+					delta_height * (glm::mat3_cast(rabbit_transform[i]->rotation) * glm::vec3(0,0,1));
+
+				rabbit_transform[i]->position += delta_height_vec;
+				if (glm::distance(rabbit_transform[i]->position, rabbit_base_pos[i]) >= max_height)
+					rabbit_state_array[i] = moving_down;
+			}
+			else if (rabbit_state_array[i] == moving_down) {
+				glm::vec3 delta_height_vec = 
+					delta_height * (glm::mat3_cast(rabbit_transform[i]->rotation) * glm::vec3(0,0,1));
+
+				rabbit_transform[i]->position -= delta_height_vec;
+				if (glm::distance(rabbit_transform[i]->position, rabbit_base_pos[i]) <= min_height)
+					rabbit_state_array[i] = inactive;
+			}
+			else {
+				throw std::runtime_error("unexpected rabbit state");
+			}
+		}
+	}
 
 	//move camera:
 	{

@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <deque>
+#include <stdlib.h>  // for random number generator
 
 struct PlayMode : Mode {
 	PlayMode();
@@ -26,6 +27,20 @@ struct PlayMode : Mode {
 
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
+
+	// current axis of rotation
+	Scene::Transform *moon = nullptr;
+	glm::vec3 moon_cur_axis;
+
+	enum rabbit_state {
+		inactive = 0,
+		moving_up = 1,
+		moving_down = 2
+	};
+
+	std::vector<rabbit_state> rabbit_state_array;
+	std::vector<Scene::Transform *> rabbit_transform;
+	std::vector<glm::vec3> rabbit_base_pos;
 
 	//hexapod leg to wobble:
 	// Scene::Transform *hip = nullptr;
