@@ -50,24 +50,21 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 			rabbit_state_array.push_back(inactive);
 			rabbit_base_pos.push_back(transform.position);
 		}
-		// if (transform.name == "Hip.FL") hip = &transform;
-		// else if (transform.name == "UpperLeg.FL") upper_leg = &transform;
-		// else if (transform.name == "LowerLeg.FL") lower_leg = &transform;
+		else if (transform.name == "Car") {
+			car = &transform;
+			car_base_pos = transform.position;
+		}
 	}
 	assert(rabbit_transform.size() == rabbit_state_array.size() 
 		&& rabbit_state_array.size() == rabbit_base_pos.size());
 
 	if (moon == nullptr) throw std::runtime_error("moon not found.");
+	if (car == nullptr) throw std::runtime_error("car not found.");
 	if (rabbit_transform.size() < 14) throw std::runtime_error("some rabbits are lost: " + std::to_string(rabbit_transform.size()));
-	// if (hip == nullptr) throw std::runtime_error("Hip not found.");
-	// if (upper_leg == nullptr) throw std::runtime_error("Upper leg not found.");
-	// if (lower_leg == nullptr) throw std::runtime_error("Lower leg not found.");
 
 	moon_cur_axis = glm::vec3(0, 0, 1);
 	srand(15666u);
-	// hip_base_rotation = hip->rotation;
-	// upper_leg_base_rotation = upper_leg->rotation;
-	// lower_leg_base_rotation = lower_leg->rotation;
+
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -139,44 +136,28 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 void PlayMode::update(float elapsed) {
 
-	// //slowly rotates through [0,1):
-	// wobble += elapsed / 10.0f;
-	// wobble -= std::floor(wobble);
-
-	// hip->rotation = hip_base_rotation * glm::angleAxis(
-	// 	glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 1.0f, 0.0f)
-	// );
-	// upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-	// 	glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 0.0f, 1.0f)
-	// );
-	// lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-	// 	glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-	// 	glm::vec3(0.0f, 0.0f, 1.0f)
-	// );
-
 	// rotate the moon
 	{
-		float delta = static_cast<float>(rand() % 10) / 40.0f;
+		static float target_z = 0;
+		static float time_elapsed = 0;
 
-		// not sure if normalization is necessary, but I just do it anyway
-		if (moon_cur_axis.x >= moon_cur_axis.y && moon_cur_axis.x >= moon_cur_axis.z)
-			moon_cur_axis += glm::vec3(0, 0, delta);
-		else if (moon_cur_axis.y >= moon_cur_axis.x && moon_cur_axis.y >= moon_cur_axis.z)
-			moon_cur_axis += glm::vec3(0, delta, 0);
-		if (moon_cur_axis.z >= moon_cur_axis.x && moon_cur_axis.z >= moon_cur_axis.y)
-			moon_cur_axis += glm::vec3(delta, 0, 0);
-		// moon_cur_axis += glm::vec3(delta_x, delta_y, delta_z);
-		moon_cur_axis = glm::normalize(moon_cur_axis);
-		float moon_rot_speed = float(2 * M_PI) * 0.05f;
+		time_elapsed += elapsed;
+		if (time_elapsed >= 1) {
+			time_elapsed = 0;
+			target_z = static_cast<float>(rand() % 30) / 100.0f;
+		}
+
+		moon_cur_axis = glm::normalize(glm::vec3(1, 0, target_z));
+		// moon rotates backward s.t. the car looks like it's moving forward
+		static float moon_rot_speed = -float(2 * M_PI) * 0.10f;
+		moon_rot_speed -= float(2 * M_PI) * 0.0003f * time_elapsed;
 
 		moon->rotation *= glm::angleAxis(moon_rot_speed * elapsed, moon_cur_axis);
 	}
 
 	// rabbit control
 	{
-		float rabbit_speed = 50;
+		float rabbit_speed = 70;
 		float delta_height = rabbit_speed * elapsed;
 
 		float max_height = 30;
@@ -194,6 +175,7 @@ void PlayMode::update(float elapsed) {
 
 		// a simple state machine for rabbit movement: inactive->up->down->inactive->...
 		for (int i = 0; i < rabbit_transform.size(); i++) {
+			// rabbit position update
 			if (rabbit_state_array[i] == inactive) {
 				if (bernoulli_trial(1.0f - rising_rabbits_count / max_rising_rabbits - 0.2f)) {
 					rabbit_state_array[i] = moving_up;
@@ -223,28 +205,34 @@ void PlayMode::update(float elapsed) {
 			else {
 				throw std::runtime_error("unexpected rabbit state");
 			}
+
+			// collision detection (just a distance check)
+			auto angle_between = [](glm::vec3 a, glm::vec3 b) {
+				return glm::acos(glm::dot(a, b));
+			};
+			bool is_z_aligned = angle_between(glm::mat3_cast(rabbit_transform[i]->rotation) * glm::vec3(0,0,1), 
+				car->position - rabbit_transform[i]->position) <= glm::radians(40.0f);
+			float collision_dist = is_z_aligned? 8.0f : 5.0f; 
+			if (glm::distance(rabbit_transform[i]->position, car->position) < collision_dist) {
+				is_game_over = true;
+			}
 		}
 	}
 
-	//move camera:
+	// car control
 	{
-		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed) move.x =-1.0f;
-		if (!left.pressed && right.pressed) move.x = 1.0f;
-		if (down.pressed && !up.pressed) move.y =-1.0f;
-		if (!down.pressed && up.pressed) move.y = 1.0f;
+		float car_speed = 30.0f;
+		float max_displacement = 10.0f;
 
-		//make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
+		float delta_x = 0.0f;
+		if (left.pressed && !right.pressed) delta_x += car_speed * elapsed;
+		if (!left.pressed && right.pressed) delta_x -= car_speed * elapsed;
+		
+		glm::vec3 new_pos = car->position + glm::vec3(delta_x, 0, 0);
 
-		glm::mat4x3 frame = camera->transform->make_local_to_parent();
-		glm::vec3 frame_right = frame[0];
-		//glm::vec3 up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
-
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
+		if (glm::distance(new_pos, car_base_pos) <= max_displacement) {
+			car->position = new_pos;
+		}
 	}
 
 	//reset button press counters:
@@ -288,14 +276,22 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("AD moves the car; Try to dodge all alien rabbits",
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
 		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("AD moves the car; Try to dodge all alien rabbits",
 			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+
+		if (is_game_over) {
+			constexpr float H2 = 0.4f;
+			lines.draw_text("Game Over",
+			glm::vec3(-aspect + 2.5f * H2, -1.0 + 2.5f * H2, 0.0),
+			glm::vec3(H2, 0.0f, 0.0f), glm::vec3(0.0f, H2, 0.0f),
+			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+		}
 	}
 }

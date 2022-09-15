@@ -33,6 +33,9 @@ struct PlayMode : Mode {
 	Scene::Transform *moon = nullptr;
 	glm::vec3 moon_cur_axis;
 
+	Scene::Transform *car = nullptr;
+	glm::vec3 car_base_pos;
+
 	enum rabbit_state {
 		inactive = 0,
 		moving_up = 1,
@@ -55,4 +58,5 @@ struct PlayMode : Mode {
 	//camera:
 	Scene::Camera *camera = nullptr;
 
+	bool is_game_over = false;
 };
