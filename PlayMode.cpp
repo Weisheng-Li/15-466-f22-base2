@@ -182,19 +182,35 @@ void PlayMode::update(float elapsed) {
 		float max_height = 30;
 		float min_height = 2 * delta_height;
 
+		float max_rising_rabbits = 3;
+		float rising_rabbits_count = 0;
+
+		// p is the success rate range from 0 to 1
+		auto bernoulli_trial = [](float p) {
+			if (p < 0) p = 0.0f;
+			if (p > 1) p = 1.0f;
+			return static_cast<float>(rand() % 100) / 100.0f <= p;
+		};
+
 		// a simple state machine for rabbit movement: inactive->up->down->inactive->...
 		for (int i = 0; i < rabbit_transform.size(); i++) {
 			if (rabbit_state_array[i] == inactive) {
-				rabbit_state_array[i] = moving_up;
-			} 
+				if (bernoulli_trial(1.0f - rising_rabbits_count / max_rising_rabbits - 0.2f)) {
+					rabbit_state_array[i] = moving_up;
+					rising_rabbits_count++;
+				}
+			}
 			else if (rabbit_state_array[i] == moving_up) {
+				rising_rabbits_count += 1;
 				// rotate up unit vector to object orientation and scale with delta_height
 				glm::vec3 delta_height_vec = 
 					delta_height * (glm::mat3_cast(rabbit_transform[i]->rotation) * glm::vec3(0,0,1));
 
 				rabbit_transform[i]->position += delta_height_vec;
-				if (glm::distance(rabbit_transform[i]->position, rabbit_base_pos[i]) >= max_height)
+				if (glm::distance(rabbit_transform[i]->position, rabbit_base_pos[i]) >= max_height) {
 					rabbit_state_array[i] = moving_down;
+					rising_rabbits_count -= 1;
+				}
 			}
 			else if (rabbit_state_array[i] == moving_down) {
 				glm::vec3 delta_height_vec = 

@@ -7,6 +7,7 @@
 #include <vector>
 #include <deque>
 #include <stdlib.h>  // for random number generator
+#include <random>
 
 struct PlayMode : Mode {
 	PlayMode();
