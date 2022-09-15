@@ -1,8 +1,8 @@
-# (TODO: your game's title)
+# Moon Craters == Rabbit Holes!
 
-Author: (TODO: your name)
+Author: Weisheng Li
 
-Design: (TODO: In two sentences or fewer, describe what is new and interesting about your game.)
+Design: The game is inspired by a traditional Chinese festival, which is all about moon and rabbits. I try to emulate the exitement of barely dodging something fast and dangerous. In this game, you control a flying car that keeps getting faster. You need to steer this untamable vihecle to dodge the attacks from giant alien rabbits.
 
 Screen Shot:
 
@@ -10,6 +10,6 @@ Screen Shot:
 
 How To Play:
 
-(TODO: describe the controls and (if needed) goals/strategy.)
+Press A/D to move left/right.
 
 This game was built with [NEST](NEST.md).
