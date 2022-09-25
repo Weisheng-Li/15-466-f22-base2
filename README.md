@@ -1,4 +1,4 @@
-# Moon Craters == Rabbit Holes!
+# Moon and rabbits
 
 Author: Weisheng Li
 
